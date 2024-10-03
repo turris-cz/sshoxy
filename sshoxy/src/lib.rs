@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 use async_trait::async_trait;
 use russh::server::{Msg, Session};
@@ -103,7 +103,7 @@ pub trait ProxyHooks: server::Handler {
         &mut self,
         user: String,
         password: String,
-        peer_addr: Option<std::net::SocketAddr>,
+        peer_addr: Option<SocketAddr>,
     ) -> (String, String) {
         (user, password)
     }
@@ -122,6 +122,7 @@ where
     client_session_handle: Arc<Mutex<Option<server::Handle>>>,
     server_channel: Arc<Mutex<Option<Channel<client::Msg>>>>,
     server_config: Arc<russh::client::Config>,
+    server_addr: SocketAddr,
     id: usize,
 }
 
@@ -137,6 +138,7 @@ where
             client_session_handle: Arc::new(Mutex::new(None)),
             server_channel: Arc::new(Mutex::new(None)),
             server_config: self.server_config.clone(),
+            server_addr: self.server_addr.clone(),
             id: self.id + 1,
         }
     }
@@ -147,7 +149,7 @@ where
     T: server::Handler + Clone,
 {
     /// Creates new Proxy instance
-    pub fn new(handler: T, server_config: russh::client::Config) -> Self {
+    pub fn new(handler: T, server_config: russh::client::Config, server_addr: SocketAddr) -> Self {
         Self {
             handler,
             peer_addr: None,
@@ -155,12 +157,13 @@ where
             client_session_handle: Arc::new(Mutex::new(None)),
             server_channel: Arc::new(Mutex::new(None)),
             server_config: Arc::new(server_config),
+            server_addr,
             id: 0,
         }
     }
 
     /// Clones with new client
-    pub fn clone_with_peer_addr(&self, peer_addr: Option<std::net::SocketAddr>) -> Self {
+    pub fn clone_with_peer_addr(&self, peer_addr: Option<SocketAddr>) -> Self {
         let mut cloned = self.clone();
         cloned.peer_addr = peer_addr;
         cloned
@@ -228,7 +231,7 @@ where
         let client_session_handle = Arc::new(Mutex::new(None));
         let mut server_handle = client::connect(
             self.server_config.clone(),
-            "127.0.0.1:22",
+            self.server_addr.clone(),
             SshServerHandler {
                 client_channel: client_channel.clone(),
                 client_session_handle: client_session_handle.clone(),

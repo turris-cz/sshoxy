@@ -20,7 +20,11 @@ async fn main() -> Result<(), i32> {
     };
     let config = Arc::new(config);
     let mut sh = Server {
-        proxy: Proxy::new(ProxyHandler {}, client::Config::default()),
+        proxy: Proxy::new(
+            ProxyHandler {},
+            client::Config::default(),
+            "127.0.0.1:22".parse().unwrap(),
+        ),
     };
 
     sh.run_on_address(config, ("127.1.0.1", 2222))

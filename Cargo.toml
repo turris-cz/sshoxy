@@ -2,7 +2,7 @@
 resolver = "2"
 
 members = [
-    "sshoxy",
+    "sshoxy", "sshoxy-bin",
 ]
 
 default-members = [

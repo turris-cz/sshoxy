@@ -1,18 +1,22 @@
 [package]
-name = "sshoxy"
+name = "sshoxy-bin"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 anyhow = "1"
+clap = { version = "4.5.19", features = ["derive"] }
+env_logger = "0"
 async-trait = "0"
 log = "0"
 russh = "0"
 russh-keys = "0"
+sshoxy = { path="../sshoxy/" }
 tokio = { version = "1", features = ["macros", "net", "io-util"] }
 
-[dev-dependencies]
-env_logger = "0"
-
 [features]
-openssl = ["russh/openssl", "russh-keys/openssl"]
+openssl = ["sshoxy/openssl"]
+
+[[bin]]
+name = "sshoxy"
+path = "src/main.rs"

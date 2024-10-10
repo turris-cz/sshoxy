@@ -157,6 +157,11 @@ async fn main() -> Result<(), anyhow::Error> {
         .map_err(anyhow::Error::from)?;
     let load_balancer_output: LoadBalancerOutput =
         serde_json::from_value(load_balancer_json).map_err(anyhow::Error::from)?;
+    log::info!(
+        "Haas loadbalancer: address {} : port {}",
+        load_balancer_output.host,
+        load_balancer_output.port
+    );
 
     // Validate haas token using API
     let client = Client::new();
@@ -173,12 +178,15 @@ async fn main() -> Result<(), anyhow::Error> {
     let validate_output: ValidateOutput =
         serde_json::from_value(validate_output_json).map_err(anyhow::Error::from)?;
 
+    log::info!("Haas token validation: {}", validate_output.valid);
+
     if !validate_output.valid {
         bail!("token is not valid")
     }
 
     let socket_clients = Arc::new(Mutex::new(vec![]));
     if let Some(listener) = config.socket.as_ref() {
+        log::info!("Starting push socket: {}", listener);
         let listener = TcpListener::bind(listener)
             .await
             .map_err(anyhow::Error::from)?;
@@ -191,6 +199,7 @@ async fn main() -> Result<(), anyhow::Error> {
                     .await
                     .push(Arc::new(Mutex::new(socket)));
             }
+            log::error!("Push socket terminated")
         });
     }
 
@@ -209,6 +218,7 @@ async fn main() -> Result<(), anyhow::Error> {
         ),
     };
 
+    log::info!("Starting proxied ssh server: {}", config.listen);
     sh.run_on_address(server_config, config.listen)
         .await
         .map_err(anyhow::Error::from)

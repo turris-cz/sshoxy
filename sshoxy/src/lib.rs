@@ -19,12 +19,55 @@ impl client::Handler for SshServerHandler {
     type Error = russh::Error;
 
     #[allow(unused_variables)]
+    async fn channel_success(
+        &mut self,
+        channel: ChannelId,
+        session: &mut client::Session,
+    ) -> Result<(), Self::Error> {
+        log::debug!("SSH server client: channel success (id={})", channel);
+        // Get channel id of connected client
+        let channel_id = self.client_channel.lock().await.as_ref().unwrap().id();
+        self.client_session_handle
+            .lock()
+            .await
+            .as_ref()
+            .unwrap()
+            .channel_success(channel_id)
+            .await
+            .map_err(|e| Error::Disconnect)
+    }
+
+    #[allow(unused_variables)]
+    async fn channel_failure(
+        &mut self,
+        channel: ChannelId,
+        session: &mut client::Session,
+    ) -> Result<(), Self::Error> {
+        log::debug!("SSH server client: channel failure (id={})", channel);
+        // Get channel id of connected client
+        let channel_id = self.client_channel.lock().await.as_ref().unwrap().id();
+        self.client_session_handle
+            .lock()
+            .await
+            .as_ref()
+            .unwrap()
+            .channel_failure(channel_id)
+            .await
+            .map_err(|e| Error::Disconnect)
+    }
+
+    #[allow(unused_variables)]
     async fn data(
         &mut self,
         channel: ChannelId,
         data: &[u8],
         session: &mut client::Session,
     ) -> Result<(), Self::Error> {
+        log::debug!(
+            "SSH server client: got data (size={}) (id={})",
+            data.len(),
+            channel
+        );
         self.client_channel
             .lock()
             .await
@@ -50,6 +93,7 @@ impl client::Handler for SshServerHandler {
         channel: ChannelId,
         session: &mut client::Session,
     ) -> Result<(), Self::Error> {
+        log::debug!("SSH server client: channel close (id={})", channel);
         self.client_channel
             .lock()
             .await
@@ -65,6 +109,7 @@ impl client::Handler for SshServerHandler {
         channel: ChannelId,
         session: &mut client::Session,
     ) -> Result<(), Self::Error> {
+        log::debug!("SSH server client: channel eof (id={})", channel);
         self.client_channel
             .lock()
             .await
@@ -81,12 +126,19 @@ impl client::Handler for SshServerHandler {
         exit_status: u32,
         session: &mut client::Session,
     ) -> Result<(), Self::Error> {
+        log::debug!(
+            "SSH server client: exit status {} (id={})",
+            exit_status,
+            channel
+        );
+        // Get channel id of connected client
+        let channel_id = self.client_channel.lock().await.as_ref().unwrap().id();
         self.client_session_handle
             .lock()
             .await
             .as_ref()
             .unwrap()
-            .exit_status_request(channel, exit_status)
+            .exit_status_request(channel_id, exit_status)
             .await
             .map_err(|_| Error::Disconnect)
     }
@@ -184,12 +236,14 @@ where
         submethods: &str,
         response: Option<server::Response<'async_trait>>,
     ) -> Result<server::Auth, Self::Error> {
+        log::debug!("Connected client: auth_keyboard_interactive");
         Ok(server::Auth::Reject {
             proceed_with_methods: Some(MethodSet::PASSWORD),
         })
     }
 
     async fn auth_succeeded(&mut self, session: &mut Session) -> Result<(), Self::Error> {
+        log::debug!("Connected client: auth_succeeded");
         *self.client_session_handle.lock().await = Some(session.handle());
         Ok(())
     }
@@ -200,6 +254,7 @@ where
         user: &str,
         public_key: &keys::key::PublicKey,
     ) -> Result<server::Auth, Self::Error> {
+        log::debug!("Connected client: auth_publickey");
         Ok(server::Auth::Reject {
             proceed_with_methods: Some(MethodSet::PASSWORD),
         })
@@ -211,6 +266,7 @@ where
         channel: Channel<Msg>,
         session: &mut Session,
     ) -> Result<bool, Self::Error> {
+        log::debug!("Connected client: open_session (id={})", channel.id());
         *self.client_channel.lock().await = Some(channel);
         Ok(true)
     }
@@ -221,6 +277,7 @@ where
         user: &str,
         password: &str,
     ) -> Result<server::Auth, Self::Error> {
+        log::debug!("Connected client: auth_password");
         let (user, password) = self
             .handler
             .pre_auth_password(user.to_owned(), password.to_owned(), self.peer_addr.clone())
@@ -261,6 +318,7 @@ where
         modes: &[(Pty, u32)],
         session: &mut Session,
     ) -> Result<(), Self::Error> {
+        log::debug!("Connected client: pty_request (id={})", channel);
         self.server_channel
             .lock()
             .await
@@ -279,6 +337,7 @@ where
         channel: ChannelId,
         session: &mut Session,
     ) -> Result<(), Self::Error> {
+        log::debug!("Connected client: shell_request (id={})", channel);
         self.server_channel
             .lock()
             .await
@@ -297,6 +356,7 @@ where
         variable_value: &str,
         session: &mut Session,
     ) -> Result<(), Self::Error> {
+        log::debug!("Connected client: env_request (id={})", channel);
         self.server_channel
             .lock()
             .await
@@ -314,6 +374,7 @@ where
         data: &[u8],
         session: &mut Session,
     ) -> Result<(), Self::Error> {
+        log::debug!("Connected client: got data (size={}) (id={})", data.len(), channel);
         self.server_channel
             .lock()
             .await
@@ -330,6 +391,7 @@ where
         channel: ChannelId,
         session: &mut Session,
     ) -> Result<(), Self::Error> {
+        log::debug!("Connected client: channel_close (id={})", channel);
         self.server_channel
             .lock()
             .await
@@ -346,6 +408,7 @@ where
         channel: ChannelId,
         session: &mut Session,
     ) -> Result<(), Self::Error> {
+        log::debug!("Connected client: channel_eof (id={})", channel);
         self.server_channel
             .lock()
             .await
@@ -363,6 +426,7 @@ where
         data: &[u8],
         session: &mut Session,
     ) -> Result<(), Self::Error> {
+        log::debug!("Connected client: exec_request (id={})", channel);
         self.server_channel
             .lock()
             .await
@@ -383,6 +447,7 @@ where
         pix_height: u32,
         session: &mut Session,
     ) -> Result<(), Self::Error> {
+        log::debug!("Connected client: window change request (id={})", channel);
         self.server_channel
             .lock()
             .await

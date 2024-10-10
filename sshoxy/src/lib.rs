@@ -8,6 +8,7 @@ use tokio::sync::Mutex;
 /// Deals with connection from proxy to ssh server
 #[derive(Clone)]
 struct SshServerHandler {
+    propagate_channel_failure: bool,
     /// ssh client's channel to ssh server
     /// is used to send data from ssh server back to client
     client_channel: Arc<Mutex<Option<Channel<Msg>>>>,
@@ -43,17 +44,44 @@ impl client::Handler for SshServerHandler {
         channel: ChannelId,
         session: &mut client::Session,
     ) -> Result<(), Self::Error> {
-        log::debug!("SSH server client: channel failure (id={})", channel);
-        // Get channel id of connected client
-        let channel_id = self.client_channel.lock().await.as_ref().unwrap().id();
-        self.client_session_handle
+        if self.propagate_channel_failure {
+            log::debug!("SSH server client: channel failure (id={})", channel);
+            // Get channel id of connected client
+            let channel_id = self.client_channel.lock().await.as_ref().unwrap().id();
+            self.client_session_handle
+                .lock()
+                .await
+                .as_ref()
+                .unwrap()
+                .channel_failure(channel_id)
+                .await
+                .map_err(|e| Error::Disconnect)
+        } else {
+            Ok(())
+        }
+    }
+
+    #[allow(unused_variables)]
+    async fn extended_data(
+        &mut self,
+        channel: ChannelId,
+        ext: u32,
+        data: &[u8],
+        session: &mut client::Session,
+    ) -> Result<(), Self::Error> {
+        log::debug!(
+            "SSH server client: got extended data (size={}) (id={})",
+            data.len(),
+            channel
+        );
+        self.client_channel
             .lock()
             .await
             .as_ref()
             .unwrap()
-            .channel_failure(channel_id)
+            .extended_data(ext, data)
             .await
-            .map_err(|e| Error::Disconnect)
+            .map_err(Into::into)
     }
 
     #[allow(unused_variables)]
@@ -169,6 +197,7 @@ where
     T: server::Handler + Clone,
 {
     handler: T,
+    propagate_channel_failure: bool,
     peer_addr: Option<std::net::SocketAddr>,
     client_channel: Arc<Mutex<Option<Channel<Msg>>>>,
     client_session_handle: Arc<Mutex<Option<server::Handle>>>,
@@ -184,8 +213,9 @@ where
 {
     fn clone(&self) -> Self {
         Self {
-            peer_addr: None,
             handler: self.handler.clone(),
+            propagate_channel_failure: self.propagate_channel_failure,
+            peer_addr: None,
             client_channel: Arc::new(Mutex::new(None)),
             client_session_handle: Arc::new(Mutex::new(None)),
             server_channel: Arc::new(Mutex::new(None)),
@@ -201,10 +231,16 @@ where
     T: server::Handler + Clone,
 {
     /// Creates new Proxy instance
-    pub fn new(handler: T, server_config: russh::client::Config, server_addr: SocketAddr) -> Self {
+    pub fn new(
+        handler: T,
+        server_config: russh::client::Config,
+        server_addr: SocketAddr,
+        propagate_channel_failure: bool,
+    ) -> Self {
         Self {
             handler,
             peer_addr: None,
+            propagate_channel_failure,
             client_channel: Arc::new(Mutex::new(None)),
             client_session_handle: Arc::new(Mutex::new(None)),
             server_channel: Arc::new(Mutex::new(None)),
@@ -290,6 +326,7 @@ where
             self.server_config.clone(),
             self.server_addr.clone(),
             SshServerHandler {
+                propagate_channel_failure: self.propagate_channel_failure,
                 client_channel: client_channel.clone(),
                 client_session_handle: client_session_handle.clone(),
             },
@@ -374,13 +411,40 @@ where
         data: &[u8],
         session: &mut Session,
     ) -> Result<(), Self::Error> {
-        log::debug!("Connected client: got data (size={}) (id={})", data.len(), channel);
+        log::debug!(
+            "Connected client: got data (size={}) (id={})",
+            data.len(),
+            channel
+        );
         self.server_channel
             .lock()
             .await
             .as_ref()
             .unwrap()
             .data(data)
+            .await
+            .map_err(Into::into)
+    }
+
+    #[allow(unused_variables)]
+    async fn extended_data(
+        &mut self,
+        channel: ChannelId,
+        code: u32,
+        data: &[u8],
+        session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        log::debug!(
+            "Connected client: got extended data (size={}) (id={})",
+            data.len(),
+            channel
+        );
+        self.server_channel
+            .lock()
+            .await
+            .as_ref()
+            .unwrap()
+            .extended_data(code, data)
             .await
             .map_err(Into::into)
     }

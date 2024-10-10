@@ -39,7 +39,6 @@ struct Args {
     /// Address and port of SSH server which will be proxied
     #[arg(short, long, value_name = "IP:PORT")]
     ssh_server: SocketAddr,
-
 }
 
 use sshoxy::{Proxy, ProxyHooks};
@@ -69,7 +68,12 @@ async fn main() -> Result<(), i32> {
     };
     let config = Arc::new(config);
     let mut sh = Server {
-        proxy: Proxy::new(ProxyHandler {}, client::Config::default(), args.ssh_server),
+        proxy: Proxy::new(
+            ProxyHandler {},
+            client::Config::default(),
+            args.ssh_server,
+            false,
+        ),
     };
 
     sh.run_on_address(config, args.listen)

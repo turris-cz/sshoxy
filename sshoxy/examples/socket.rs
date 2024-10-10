@@ -48,6 +48,7 @@ async fn main() -> Result<(), i32> {
             ProxyHandler { socket_clients },
             client::Config::default(),
             "127.0.0.1:22".parse().unwrap(),
+            false,
         ),
     };
 

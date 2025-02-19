@@ -3,6 +3,7 @@ use std::{
     env,
     net::{SocketAddr, ToSocketAddrs},
     path::PathBuf,
+    process::{Command, Stdio},
     sync::Arc,
 };
 
@@ -30,6 +31,7 @@ struct Config {
     token: String,
     api_url: String,
     socket: Option<SocketAddr>,
+    command: Option<PathBuf>,
     ssh_key: Option<PathBuf>,
 }
 
@@ -76,6 +78,7 @@ impl Default for Config {
             api_url: DEFAULT_HAAS_API.to_owned(),
             token: String::new(),
             socket: None,
+            command: None,
             ssh_key: None,
         }
     }
@@ -107,6 +110,9 @@ fn make_config() -> Result<Config, anyhow::Error> {
     }
     if let Ok(ssh_key) = env::var("HAAS_SECRET_KEY") {
         config.ssh_key = Some(ssh_key.into());
+    }
+    if let Ok(command) = env::var("HAAS_COMMAND") {
+        config.command = Some(command.into());
     }
 
     Ok(config)
@@ -209,6 +215,7 @@ async fn main() -> Result<(), anyhow::Error> {
             ProxyHandler {
                 socket_clients,
                 socket_enabled: config.socket.is_some(),
+                command: config.command,
                 token: config.token,
             },
             client::Config::default(),
@@ -229,6 +236,7 @@ async fn main() -> Result<(), anyhow::Error> {
 struct ProxyHandler {
     socket_clients: Arc<Mutex<Vec<Arc<Mutex<TcpStream>>>>>,
     socket_enabled: bool,
+    command: Option<PathBuf>,
     token: String,
 }
 
@@ -279,6 +287,18 @@ impl ProxyHooks for ProxyHandler {
                     }
                 });
             });
+        }
+
+        if let Some(command) = self.command.as_ref() {
+            if let Err(_) = Command::new(command)
+                .args(&[peer_addr_str.as_str(), user.as_str(), password.as_str()])
+                .stdin(Stdio::null())
+                .stderr(Stdio::null())
+                .stdout(Stdio::null())
+                .env_clear()
+                .spawn() {
+                log::warn!("Failed to start command '{}'", command.to_string_lossy());
+            }
         }
 
         let password = if let Some(peer_addr) = peer_addr {

@@ -35,6 +35,7 @@ Haas proxy can be configured via env variables
 * HAAS_API - base path to haas api endpoint (default https://haas.nic.cz/api)
 * HAAS_LISTEN - host and port where proxy should listen (default 127.0.0.1:22)
 * HAAS_SOCKET - socket where auth data should be published (optional)
+* HAAS_COMMAND - command to which auth data will be passed to (optional)
 
 Example
 ```

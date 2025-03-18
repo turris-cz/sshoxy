@@ -15,7 +15,6 @@ struct SshServerHandler {
     client_session_handle: Arc<Mutex<Option<server::Handle>>>,
 }
 
-#[async_trait]
 impl client::Handler for SshServerHandler {
     type Error = russh::Error;
 
@@ -109,7 +108,7 @@ impl client::Handler for SshServerHandler {
     #[allow(unused_variables)]
     async fn check_server_key(
         &mut self,
-        server_public_key: &russh_keys::key::PublicKey,
+        server_public_key: &russh::keys::PublicKey,
     ) -> Result<bool, Self::Error> {
         // bypass server key checking
         Ok(true)
@@ -258,7 +257,6 @@ where
     }
 }
 
-#[async_trait]
 impl<T> server::Handler for Proxy<T>
 where
     T: ProxyHooks + Send + Clone,
@@ -266,15 +264,19 @@ where
     type Error = T::Error;
 
     #[allow(unused_variables)]
-    async fn auth_keyboard_interactive(
-        &mut self,
+    async fn auth_keyboard_interactive<'a>(
+        &'a mut self,
         user: &str,
         submethods: &str,
-        response: Option<server::Response<'async_trait>>,
+        response: Option<server::Response<'a>>,
     ) -> Result<server::Auth, Self::Error> {
         log::debug!("Connected client: auth_keyboard_interactive");
+        let mut method_set = MethodSet::empty();
+        method_set.push(MethodKind::Password);
+
         Ok(server::Auth::Reject {
-            proceed_with_methods: Some(MethodSet::PASSWORD),
+            proceed_with_methods: Some(method_set),
+            partial_success: false,
         })
     }
 
@@ -288,11 +290,14 @@ where
     async fn auth_publickey(
         &mut self,
         user: &str,
-        public_key: &keys::key::PublicKey,
+        public_key: &keys::PublicKey,
     ) -> Result<server::Auth, Self::Error> {
         log::debug!("Connected client: auth_publickey");
+        let mut method_set = MethodSet::empty();
+        method_set.push(MethodKind::Password);
         Ok(server::Auth::Reject {
-            proceed_with_methods: Some(MethodSet::PASSWORD),
+            proceed_with_methods: Some(method_set),
+            partial_success: false,
         })
     }
 

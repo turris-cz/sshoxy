@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use russh::keys::key;
 use russh::{client, server::Server as _, *};
-use russh_keys::key;
 
 use sshoxy::{Proxy, ProxyHooks};
 

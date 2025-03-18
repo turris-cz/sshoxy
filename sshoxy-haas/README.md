@@ -31,7 +31,7 @@ cargo build --features openssl
 Haas proxy can be configured via env variables
 
 * HAAS_TOKEN - your token which can be obtained from htts://haas.nic.cz/
-* HAAS_SECRED_KEY - path to secret server ssh key of your proxy (optional)
+* HAAS_SECRET_KEY - path to secret server ssh key of your proxy (optional)
 * HAAS_API - base path to haas api endpoint (default https://haas.nic.cz/api)
 * HAAS_LISTEN - host and port where proxy should listen (default 127.0.0.1:22)
 * HAAS_SOCKET - socket where auth data should be published (optional)

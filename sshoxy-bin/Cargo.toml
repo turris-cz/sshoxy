@@ -14,9 +14,6 @@ russh-keys = "0"
 sshoxy = { path="../sshoxy/" }
 tokio = { version = "1", features = ["macros", "net", "io-util"] }
 
-[features]
-openssl = ["sshoxy/openssl"]
-
 [[bin]]
 name = "sshoxy"
 path = "src/main.rs"

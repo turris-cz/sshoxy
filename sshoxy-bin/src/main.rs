@@ -5,9 +5,8 @@ use std::{
 };
 
 use async_trait::async_trait;
-use keys::key::KeyPair;
+use russh::keys::{load_secret_key, signature::rand_core::OsRng, PrivateKey};
 use russh::{client, server::Server as _, *};
-use russh_keys::{key, load_secret_key};
 
 use clap::Parser;
 
@@ -43,13 +42,16 @@ struct Args {
 
 use sshoxy::{Proxy, ProxyHooks};
 
-fn make_key(args: &Args) -> Result<KeyPair, i32> {
+fn make_key(args: &Args) -> Result<PrivateKey, i32> {
     if let Some(path) = args.key_file.as_ref() {
         log::info!("Reading SSH key from '{}'", path.to_string_lossy());
         Ok(load_secret_key(&path, None).map_err(|_| 1)?)
     } else {
         log::info!("Generating SSH key");
-        Ok(key::KeyPair::generate_rsa(2048, key::SignatureHash::SHA2_512).unwrap())
+        Ok(
+            russh::keys::PrivateKey::random(&mut OsRng, russh::keys::Algorithm::Rsa { hash: None })
+                .map_err(|_| 1)?,
+        )
     }
 }
 
@@ -58,8 +60,11 @@ async fn main() -> Result<(), i32> {
     let args = Args::parse();
     env_logger::init();
 
+    let mut methods = MethodSet::empty();
+    methods.push(MethodKind::Password);
+
     let config = russh::server::Config {
-        methods: MethodSet::PASSWORD,
+        methods,
         inactivity_timeout: Some(std::time::Duration::from_secs(3600)),
         auth_rejection_time: std::time::Duration::from_secs(3),
         auth_rejection_time_initial: Some(std::time::Duration::from_secs(0)),

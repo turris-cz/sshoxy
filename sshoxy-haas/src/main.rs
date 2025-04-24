@@ -142,6 +142,10 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let config = make_config()?;
 
+    if config.token.is_empty() {
+        bail!("token is empty");
+    }
+
     let server_config = russh::server::Config {
         methods: MethodSet::PASSWORD,
         inactivity_timeout: Some(std::time::Duration::from_secs(3600)),

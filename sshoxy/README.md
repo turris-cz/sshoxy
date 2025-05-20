@@ -9,7 +9,6 @@ A set of hooks can be used to alter the behaviour of the proxy in some parts of 
 
 
 ## Requirements
-* openssl(optional)
 
 ## Examples
 See the `examples/` dir to get an idea how this library can be used.

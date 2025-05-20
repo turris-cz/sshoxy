@@ -8,10 +8,9 @@ use std::{
 };
 
 use async_trait::async_trait;
-use keys::key::KeyPair;
 use reqwest::Client;
+use russh::keys::{load_secret_key, PrivateKey};
 use russh::{client, server::Server as _, *};
-use russh_keys::{key, load_secret_key};
 use serde::{Deserialize, Serialize};
 
 use tokio::{
@@ -118,13 +117,18 @@ fn make_config() -> Result<Config, anyhow::Error> {
     Ok(config)
 }
 
-fn make_key(config: &Config) -> Result<KeyPair, anyhow::Error> {
+fn make_key(config: &Config) -> Result<PrivateKey, anyhow::Error> {
     if let Some(path) = config.ssh_key.as_ref() {
         log::info!("Reading SSH key from '{}'", path.to_string_lossy());
         load_secret_key(&path, None).map_err(anyhow::Error::from)
     } else {
         log::info!("Generating SSH key");
-        Ok(key::KeyPair::generate_rsa(2048, key::SignatureHash::SHA2_512).unwrap())
+        Ok(PrivateKey::random(
+            &mut russh::keys::signature::rand_core::OsRng,
+            russh::keys::Algorithm::Rsa {
+                hash: Some(russh::keys::HashAlg::Sha512),
+            },
+        )?)
     }
 }
 
@@ -146,14 +150,18 @@ async fn main() -> Result<(), anyhow::Error> {
         bail!("token is empty");
     }
 
+    let mut methods = MethodSet::empty();
+    methods.push(MethodKind::Password);
+
     let server_config = russh::server::Config {
-        methods: MethodSet::PASSWORD,
+        methods,
         inactivity_timeout: Some(std::time::Duration::from_secs(3600)),
         auth_rejection_time: std::time::Duration::from_secs(3),
         auth_rejection_time_initial: Some(std::time::Duration::from_secs(0)),
         keys: vec![make_key(&config)?],
         ..Default::default()
     };
+    log::debug!("Server config {:#?}", server_config);
 
     // Get haas address
     let client = Client::new();
@@ -300,7 +308,8 @@ impl ProxyHooks for ProxyHandler {
                 .stderr(Stdio::null())
                 .stdout(Stdio::null())
                 .env_clear()
-                .spawn() {
+                .spawn()
+            {
                 log::warn!("Failed to start command '{}'", command.to_string_lossy());
             }
         }

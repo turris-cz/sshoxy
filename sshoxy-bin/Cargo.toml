@@ -9,13 +9,11 @@ clap = { version = "4", features = ["derive"] }
 env_logger = "0"
 async-trait = "0"
 log = "0"
-russh = "0.46.0"
-russh-keys = "0.46.0"
+russh = { version = "0.52.1", features = ["async-trait"]}
 sshoxy = { path="../sshoxy/" }
 tokio = { version = "1", features = ["macros", "net", "io-util"] }
 
 [features]
-openssl = ["sshoxy/openssl"]
 
 [[bin]]
 name = "sshoxy"

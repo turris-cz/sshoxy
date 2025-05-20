@@ -21,11 +21,6 @@ Build with logging (env RUST_LOG=debug)
 cargo build --features log
 ```
 
-Build with openssl (can produce slightly smaller binary)
-```
-cargo build --features openssl
-```
-
 ## Running
 
 Haas proxy can be configured via env variables

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use russh::keys::PrivateKey;
 use russh::{client, server::Server as _, *};
-use russh_keys::key;
 
 use sshoxy::{Proxy, ProxyHooks};
 
@@ -10,12 +10,23 @@ use sshoxy::{Proxy, ProxyHooks};
 async fn main() -> Result<(), i32> {
     env_logger::init();
 
+    let mut methods = MethodSet::empty();
+    methods.push(MethodKind::Password);
+
+    let key = PrivateKey::random(
+        &mut rand_core::OsRng,
+        russh::keys::Algorithm::Rsa {
+            hash: Some(russh::keys::HashAlg::Sha512),
+        },
+    )
+    .map_err(|_| 1)?;
+
     let config = russh::server::Config {
-        methods: MethodSet::PASSWORD,
+        methods,
         inactivity_timeout: Some(std::time::Duration::from_secs(3600)),
         auth_rejection_time: std::time::Duration::from_secs(3),
         auth_rejection_time_initial: Some(std::time::Duration::from_secs(0)),
-        keys: vec![key::KeyPair::generate_rsa(2048, key::SignatureHash::SHA2_512).unwrap()],
+        keys: vec![key],
         ..Default::default()
     };
     let config = Arc::new(config);

@@ -1,8 +1,8 @@
-use std::{net::SocketAddr, sync::Arc};
-
 use async_trait::async_trait;
 use russh::server::{Msg, Session};
 use russh::*;
+use russh::{MethodKind, MethodSet};
+use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
 
 /// Deals with connection from proxy to ssh server
@@ -11,11 +11,10 @@ struct SshServerHandler {
     propagate_channel_failure: bool,
     /// ssh client's channel to ssh server
     /// is used to send data from ssh server back to client
-    client_channel: Arc<Mutex<Option<Channel<Msg>>>>,
+    client_writer: Arc<Mutex<Option<ChannelWriteHalf<Msg>>>>,
     client_session_handle: Arc<Mutex<Option<server::Handle>>>,
 }
 
-#[async_trait]
 impl client::Handler for SshServerHandler {
     type Error = russh::Error;
 
@@ -27,7 +26,7 @@ impl client::Handler for SshServerHandler {
     ) -> Result<(), Self::Error> {
         log::debug!("SSH server client: channel success (id={})", channel);
         // Get channel id of connected client
-        let channel_id = self.client_channel.lock().await.as_ref().unwrap().id();
+        let channel_id = self.client_writer.lock().await.as_ref().unwrap().id();
         self.client_session_handle
             .lock()
             .await
@@ -44,10 +43,10 @@ impl client::Handler for SshServerHandler {
         channel: ChannelId,
         session: &mut client::Session,
     ) -> Result<(), Self::Error> {
+        log::debug!("SSH server client: channel failure (id={})", channel);
         if self.propagate_channel_failure {
-            log::debug!("SSH server client: channel failure (id={})", channel);
             // Get channel id of connected client
-            let channel_id = self.client_channel.lock().await.as_ref().unwrap().id();
+            let channel_id = self.client_writer.lock().await.as_ref().unwrap().id();
             self.client_session_handle
                 .lock()
                 .await
@@ -74,7 +73,7 @@ impl client::Handler for SshServerHandler {
             data.len(),
             channel
         );
-        self.client_channel
+        self.client_writer
             .lock()
             .await
             .as_ref()
@@ -96,7 +95,7 @@ impl client::Handler for SshServerHandler {
             data.len(),
             channel
         );
-        self.client_channel
+        self.client_writer
             .lock()
             .await
             .as_ref()
@@ -109,7 +108,7 @@ impl client::Handler for SshServerHandler {
     #[allow(unused_variables)]
     async fn check_server_key(
         &mut self,
-        server_public_key: &russh_keys::key::PublicKey,
+        server_public_key: &russh::keys::PublicKey,
     ) -> Result<bool, Self::Error> {
         // bypass server key checking
         Ok(true)
@@ -122,7 +121,7 @@ impl client::Handler for SshServerHandler {
         session: &mut client::Session,
     ) -> Result<(), Self::Error> {
         log::debug!("SSH server client: channel close (id={})", channel);
-        self.client_channel
+        self.client_writer
             .lock()
             .await
             .as_ref()
@@ -138,7 +137,7 @@ impl client::Handler for SshServerHandler {
         session: &mut client::Session,
     ) -> Result<(), Self::Error> {
         log::debug!("SSH server client: channel eof (id={})", channel);
-        self.client_channel
+        self.client_writer
             .lock()
             .await
             .as_ref()
@@ -160,7 +159,7 @@ impl client::Handler for SshServerHandler {
             channel
         );
         // Get channel id of connected client
-        let channel_id = self.client_channel.lock().await.as_ref().unwrap().id();
+        let channel_id = self.client_writer.lock().await.as_ref().unwrap().id();
         self.client_session_handle
             .lock()
             .await
@@ -199,9 +198,9 @@ where
     handler: T,
     propagate_channel_failure: bool,
     peer_addr: Option<std::net::SocketAddr>,
-    client_channel: Arc<Mutex<Option<Channel<Msg>>>>,
+    client_writer: Arc<Mutex<Option<ChannelWriteHalf<Msg>>>>,
     client_session_handle: Arc<Mutex<Option<server::Handle>>>,
-    server_channel: Arc<Mutex<Option<Channel<client::Msg>>>>,
+    server_writer: Arc<Mutex<Option<ChannelWriteHalf<client::Msg>>>>,
     server_config: Arc<russh::client::Config>,
     server_addr: SocketAddr,
     id: usize,
@@ -216,9 +215,9 @@ where
             handler: self.handler.clone(),
             propagate_channel_failure: self.propagate_channel_failure,
             peer_addr: None,
-            client_channel: Arc::new(Mutex::new(None)),
+            client_writer: Arc::new(Mutex::new(None)),
             client_session_handle: Arc::new(Mutex::new(None)),
-            server_channel: Arc::new(Mutex::new(None)),
+            server_writer: Arc::new(Mutex::new(None)),
             server_config: self.server_config.clone(),
             server_addr: self.server_addr.clone(),
             id: self.id + 1,
@@ -241,9 +240,9 @@ where
             handler,
             peer_addr: None,
             propagate_channel_failure,
-            client_channel: Arc::new(Mutex::new(None)),
+            client_writer: Arc::new(Mutex::new(None)),
             client_session_handle: Arc::new(Mutex::new(None)),
-            server_channel: Arc::new(Mutex::new(None)),
+            server_writer: Arc::new(Mutex::new(None)),
             server_config: Arc::new(server_config),
             server_addr,
             id: 0,
@@ -258,7 +257,6 @@ where
     }
 }
 
-#[async_trait]
 impl<T> server::Handler for Proxy<T>
 where
     T: ProxyHooks + Send + Clone,
@@ -266,15 +264,18 @@ where
     type Error = T::Error;
 
     #[allow(unused_variables)]
-    async fn auth_keyboard_interactive(
+    async fn auth_keyboard_interactive<'a>(
         &mut self,
         user: &str,
         submethods: &str,
-        response: Option<server::Response<'async_trait>>,
+        response: Option<server::Response<'a>>,
     ) -> Result<server::Auth, Self::Error> {
         log::debug!("Connected client: auth_keyboard_interactive");
+        let mut methods = MethodSet::empty();
+        methods.push(MethodKind::Password);
         Ok(server::Auth::Reject {
-            proceed_with_methods: Some(MethodSet::PASSWORD),
+            proceed_with_methods: Some(methods),
+            partial_success: false,
         })
     }
 
@@ -288,11 +289,14 @@ where
     async fn auth_publickey(
         &mut self,
         user: &str,
-        public_key: &keys::key::PublicKey,
+        public_key: &russh::keys::PublicKey,
     ) -> Result<server::Auth, Self::Error> {
         log::debug!("Connected client: auth_publickey");
+        let mut methods = MethodSet::empty();
+        methods.push(MethodKind::Password);
         Ok(server::Auth::Reject {
-            proceed_with_methods: Some(MethodSet::PASSWORD),
+            proceed_with_methods: Some(methods),
+            partial_success: false,
         })
     }
 
@@ -303,7 +307,13 @@ where
         session: &mut Session,
     ) -> Result<bool, Self::Error> {
         log::debug!("Connected client: open_session (id={})", channel.id());
-        *self.client_channel.lock().await = Some(channel);
+        let (mut reader, writer) = channel.split();
+        *self.client_writer.lock().await = Some(writer);
+
+        // we need to read the channel otherwise messages got stuck
+        // when channel_buffer_size is reached
+        tokio::spawn(async move { while let Some(_msg) = reader.wait().await {} });
+
         Ok(true)
     }
 
@@ -327,7 +337,7 @@ where
             self.server_addr.clone(),
             SshServerHandler {
                 propagate_channel_failure: self.propagate_channel_failure,
-                client_channel: client_channel.clone(),
+                client_writer: client_channel.clone(),
                 client_session_handle: client_session_handle.clone(),
             },
         )
@@ -335,10 +345,15 @@ where
         server_handle.authenticate_password(user, password).await?;
         let channel = server_handle.channel_open_session().await?;
 
-        self.client_channel = client_channel;
+        self.client_writer = client_channel;
         self.client_session_handle = client_session_handle;
 
-        *self.server_channel.lock().await = Some(channel);
+        let (mut reader, writer) = channel.split();
+        *self.server_writer.lock().await = Some(writer);
+
+        // we need to read the channel otherwise messages got stuck
+        // when channel_buffer_size is reached
+        tokio::spawn(async move { while let Some(_msg) = reader.wait().await {} });
 
         Ok(server::Auth::Accept)
     }
@@ -356,7 +371,7 @@ where
         session: &mut Session,
     ) -> Result<(), Self::Error> {
         log::debug!("Connected client: pty_request (id={})", channel);
-        self.server_channel
+        self.server_writer
             .lock()
             .await
             .as_ref()
@@ -375,7 +390,7 @@ where
         session: &mut Session,
     ) -> Result<(), Self::Error> {
         log::debug!("Connected client: shell_request (id={})", channel);
-        self.server_channel
+        self.server_writer
             .lock()
             .await
             .as_ref()
@@ -394,7 +409,7 @@ where
         session: &mut Session,
     ) -> Result<(), Self::Error> {
         log::debug!("Connected client: env_request (id={})", channel);
-        self.server_channel
+        self.server_writer
             .lock()
             .await
             .as_ref()
@@ -416,14 +431,8 @@ where
             data.len(),
             channel
         );
-        self.server_channel
-            .lock()
-            .await
-            .as_ref()
-            .unwrap()
-            .data(data)
-            .await
-            .map_err(Into::into)
+        let guard = self.server_writer.lock().await;
+        guard.as_ref().unwrap().data(data).await.map_err(Into::into)
     }
 
     #[allow(unused_variables)]
@@ -439,7 +448,7 @@ where
             data.len(),
             channel
         );
-        self.server_channel
+        self.server_writer
             .lock()
             .await
             .as_ref()
@@ -456,7 +465,7 @@ where
         session: &mut Session,
     ) -> Result<(), Self::Error> {
         log::debug!("Connected client: channel_close (id={})", channel);
-        self.server_channel
+        self.server_writer
             .lock()
             .await
             .as_ref()
@@ -473,7 +482,7 @@ where
         session: &mut Session,
     ) -> Result<(), Self::Error> {
         log::debug!("Connected client: channel_eof (id={})", channel);
-        self.server_channel
+        self.server_writer
             .lock()
             .await
             .as_ref()
@@ -491,7 +500,7 @@ where
         session: &mut Session,
     ) -> Result<(), Self::Error> {
         log::debug!("Connected client: exec_request (id={})", channel);
-        self.server_channel
+        self.server_writer
             .lock()
             .await
             .as_ref()
@@ -512,7 +521,7 @@ where
         session: &mut Session,
     ) -> Result<(), Self::Error> {
         log::debug!("Connected client: window change request (id={})", channel);
-        self.server_channel
+        self.server_writer
             .lock()
             .await
             .as_ref()

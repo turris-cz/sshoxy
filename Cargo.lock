@@ -2297,7 +2297,7 @@ dependencies = [
 
 [[package]]
 name = "sshoxy"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2309,7 +2309,7 @@ dependencies = [
 
 [[package]]
 name = "sshoxy-bin"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2323,7 +2323,7 @@ dependencies = [
 
 [[package]]
 name = "sshoxy-haas"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "async-trait",

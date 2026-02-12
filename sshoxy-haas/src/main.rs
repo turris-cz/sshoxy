@@ -3,19 +3,20 @@ use std::{
     env,
     net::{SocketAddr, ToSocketAddrs},
     path::PathBuf,
-    process::{Command, Stdio},
+    process::Stdio,
     sync::Arc,
 };
 
 use async_trait::async_trait;
 use reqwest::Client;
-use russh::keys::{load_secret_key, PrivateKey};
+use russh::keys::{PrivateKey, load_secret_key};
 use russh::{client, server::Server as _, *};
 use serde::{Deserialize, Serialize};
 
 use tokio::{
     io::AsyncWriteExt,
     net::{TcpListener, TcpStream},
+    process::Command,
     spawn,
     sync::Mutex,
 };
@@ -225,8 +226,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 token: config.token,
             },
             client::Config::default(),
-            load_balancer_output
-                .try_into()?,
+            load_balancer_output.try_into()?,
             false,
         ),
     };
@@ -294,17 +294,18 @@ impl ProxyHooks for ProxyHandler {
             });
         }
 
-        if let Some(command) = self.command.as_ref()
-            && Command::new(command)
+        if let Some(command) = self.command.as_ref() {
+            if let Ok(mut cmd) = Command::new(command)
                 .args([peer_addr_str.as_str(), user.as_str(), password.as_str()])
                 .stdin(Stdio::null())
                 .stderr(Stdio::null())
                 .stdout(Stdio::null())
                 .env_clear()
                 .spawn()
-                .is_err()
-        {
-            log::warn!("Failed to start command '{}'", command.to_string_lossy());
+            {
+                // properly wait for command to finish to collect all resources
+                let _ = cmd.wait().await;
+            }
         }
 
         let password = if let Some(peer_addr) = peer_addr {

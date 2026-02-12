@@ -5,7 +5,12 @@ use std::{
 };
 
 use async_trait::async_trait;
-use russh::{client, server::Server as _, *, keys::{PrivateKey, load_secret_key}};
+use russh::{
+    client,
+    keys::{PrivateKey, load_secret_key},
+    server::Server as _,
+    *,
+};
 
 use clap::Parser;
 
@@ -52,7 +57,8 @@ fn make_key(args: &Args) -> Result<PrivateKey, i32> {
             russh::keys::Algorithm::Rsa {
                 hash: Some(russh::keys::HashAlg::Sha512),
             },
-        ).map_err(|_| 1)?)
+        )
+        .map_err(|_| 1)?)
     }
 }
 
@@ -65,7 +71,6 @@ async fn main() -> Result<(), i32> {
     methods.push(MethodKind::Password);
 
     let config = russh::server::Config {
-
         methods,
         inactivity_timeout: Some(std::time::Duration::from_secs(3600)),
         auth_rejection_time: std::time::Duration::from_secs(3),

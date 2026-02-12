@@ -44,7 +44,7 @@ use sshoxy::{Proxy, ProxyHooks};
 fn make_key(args: &Args) -> Result<PrivateKey, i32> {
     if let Some(path) = args.key_file.as_ref() {
         log::info!("Reading SSH key from '{}'", path.to_string_lossy());
-        Ok(load_secret_key(&path, None).map_err(|_| 1)?)
+        Ok(load_secret_key(path, None).map_err(|_| 1)?)
     } else {
         log::info!("Generating SSH key");
         Ok(PrivateKey::random(

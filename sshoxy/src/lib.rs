@@ -80,7 +80,6 @@ impl client::Handler for SshServerHandler {
             .unwrap()
             .extended_data(ext, data)
             .await
-            .map_err(Into::into)
     }
 
     #[allow(unused_variables)]
@@ -102,7 +101,6 @@ impl client::Handler for SshServerHandler {
             .unwrap()
             .data(data)
             .await
-            .map_err(Into::into)
     }
 
     #[allow(unused_variables)]
@@ -219,7 +217,7 @@ where
             client_session_handle: Arc::new(Mutex::new(None)),
             server_writer: Arc::new(Mutex::new(None)),
             server_config: self.server_config.clone(),
-            server_addr: self.server_addr.clone(),
+            server_addr: self.server_addr,
             id: self.id + 1,
         }
     }
@@ -326,7 +324,7 @@ where
         log::debug!("Connected client: auth_password");
         let (user, password) = self
             .handler
-            .pre_auth_password(user.to_owned(), password.to_owned(), self.peer_addr.clone())
+            .pre_auth_password(user.to_owned(), password.to_owned(), self.peer_addr)
             .await;
 
         // share proxy->client structs
@@ -334,7 +332,7 @@ where
         let client_session_handle = Arc::new(Mutex::new(None));
         let mut server_handle = client::connect(
             self.server_config.clone(),
-            self.server_addr.clone(),
+            self.server_addr,
             SshServerHandler {
                 propagate_channel_failure: self.propagate_channel_failure,
                 client_writer: client_channel.clone(),

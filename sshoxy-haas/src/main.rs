@@ -41,12 +41,6 @@ struct LoadBalancerOutput {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct ValidateInput {
-    #[serde(rename = "device-token")]
-    device_token: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
 struct ValidateOutput {
     valid: bool,
 }
@@ -120,7 +114,7 @@ fn make_config() -> Result<Config, anyhow::Error> {
 fn make_key(config: &Config) -> Result<PrivateKey, anyhow::Error> {
     if let Some(path) = config.ssh_key.as_ref() {
         log::info!("Reading SSH key from '{}'", path.to_string_lossy());
-        load_secret_key(&path, None).map_err(anyhow::Error::from)
+        load_secret_key(path, None).map_err(anyhow::Error::from)
     } else {
         log::info!("Generating SSH key");
         Ok(PrivateKey::random(
@@ -232,8 +226,7 @@ async fn main() -> Result<(), anyhow::Error> {
             },
             client::Config::default(),
             load_balancer_output
-                .try_into()
-                .map_err(anyhow::Error::from)?,
+                .try_into()?,
             false,
         ),
     };
@@ -301,17 +294,17 @@ impl ProxyHooks for ProxyHandler {
             });
         }
 
-        if let Some(command) = self.command.as_ref() {
-            if let Err(_) = Command::new(command)
-                .args(&[peer_addr_str.as_str(), user.as_str(), password.as_str()])
+        if let Some(command) = self.command.as_ref()
+            && Command::new(command)
+                .args([peer_addr_str.as_str(), user.as_str(), password.as_str()])
                 .stdin(Stdio::null())
                 .stderr(Stdio::null())
                 .stdout(Stdio::null())
                 .env_clear()
                 .spawn()
-            {
-                log::warn!("Failed to start command '{}'", command.to_string_lossy());
-            }
+                .is_err()
+        {
+            log::warn!("Failed to start command '{}'", command.to_string_lossy());
         }
 
         let password = if let Some(peer_addr) = peer_addr {

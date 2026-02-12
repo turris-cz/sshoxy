@@ -21,7 +21,7 @@ async fn main() -> Result<(), i32> {
     methods.push(MethodKind::Password);
 
     let key = PrivateKey::random(
-        &mut rand_core::OsRng,
+        &mut russh::keys::signature::rand_core::OsRng,
         russh::keys::Algorithm::Rsa {
             hash: Some(russh::keys::HashAlg::Sha512),
         },

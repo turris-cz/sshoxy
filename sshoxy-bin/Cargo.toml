@@ -4,14 +4,14 @@ version = "0.2.3"
 edition = "2024"
 
 [dependencies]
-anyhow = "1"
+anyhow = { workspace = true }
+async-trait = { workspace = true }
 clap = { version = "4", features = ["derive"] }
-env_logger = "0"
-async-trait = "0"
-log = "0"
-russh = { version = "0.57.0", features = ["async-trait"]}
+log = { workspace = true }
+rand = { workspace = true }
+russh = { workspace = true }
 sshoxy = { path="../sshoxy/" }
-tokio = { version = "1", features = ["macros", "net", "io-util"] }
+tokio = { workspace = true }
 
 [features]
 

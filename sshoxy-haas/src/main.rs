@@ -119,7 +119,7 @@ fn make_key(config: &Config) -> Result<PrivateKey, anyhow::Error> {
     } else {
         log::info!("Generating SSH key");
         Ok(PrivateKey::random(
-            &mut russh::keys::signature::rand_core::OsRng,
+            &mut rand::rng(),
             russh::keys::Algorithm::Rsa {
                 hash: Some(russh::keys::HashAlg::Sha512),
             },

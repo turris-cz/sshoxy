@@ -9,6 +9,14 @@ default-members = [
 	"sshoxy",
 ]
 
+[workspace.dependencies]
+anyhow = "1"
+async-trait = "0"
+log = "0"
+russh = { version = "0.60", features = ["flate2", "rsa", "async-trait", "ring"], default-features = false }
+rand = { version = "0.10", features = ["thread_rng"] }
+tokio = { version = "1", features = ["macros", "net", "io-util"] }
+
 # Binary size optimizations
 [profile.release]
 codegen-units = 1

@@ -4,11 +4,12 @@ version = "0.2.3"
 edition = "2024"
 
 [dependencies]
-anyhow = "1"
-async-trait = "0"
-log = "0"
-russh = { version = "0.57.0", features = ["async-trait"]}
-tokio = { version = "1", features = ["macros", "net", "io-util"] }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+log = { workspace = true }
+rand = { workspace = true }
+russh = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
 env_logger = "0"
